@@ -1231,7 +1231,7 @@ class AmberParm(AmberFormat, Structure):
             resolution = self.parm_data[resolution_key][i]
             grid = self.parm_data[parameter_key.format(i + 1)]
             cmts = self.parm_comments[parameter_key.format(i + 1)]
-            self.cmap_types.append(CmapType(resolution, grid, cmts, list=self.cmap_types))
+            self.cmap_types.append(CmapType(resolution, grid, cmts, tlist=self.cmap_types))
         it = iter(self.parm_data[self._cmap_prefix + 'CMAP_INDEX'])
         for i, j, k, l, m, n in zip(it, it, it, it, it, it):
             self.cmaps.append(
