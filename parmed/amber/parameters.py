@@ -1,6 +1,7 @@
 """
 This module contains classes for parsing and processing Amber parameter files.
 """
+import IPython as ip
 from collections import defaultdict
 from contextlib import closing
 import math
@@ -15,7 +16,7 @@ from ..formats.mol2 import Mol2File
 from ..formats.registry import FileFormatType
 from ..parameters import ParameterSet
 from ..periodic_table import Mass, element_by_mass, AtomicNum
-from ..topologyobjects import AtomType, BondType, AngleType, DihedralType, DihedralTypeList
+from ..topologyobjects import AtomType, BondType, AngleType, DihedralType, DihedralTypeList, CmapType
 from ..utils.io import genopen
 from collections.abc import Sequence
 
@@ -60,6 +61,22 @@ def _find_amber_file(fname, search_oldff):
         if os.path.exists(os.path.join(path, fname)):
             return os.path.join(path, fname)
     raise FileNotFoundError('Cannot find Amber file [%s] in paths %s' % (fname, paths))
+
+class AmberCmapType(CmapType):
+    def __init__(
+            self, 
+            title: str, 
+            reslist: list, 
+            resolution: int, 
+            grid: list, 
+            comments=None, 
+            tlist=None, 
+            atom_types=("C", "N", "XC", "C", "N")
+        ):
+        super().__init__(resolution, grid, comments, tlist)
+        self.title = title
+        self.reslist = reslist
+        self.atom_types = atom_types
 
 class AmberParameterSet(ParameterSet, metaclass=FileFormatType):
     """ Class storing parameters from an Amber parameter set
@@ -199,6 +216,7 @@ class AmberParameterSet(ParameterSet, metaclass=FileFormatType):
         self.default_scee = 1.2
         self.default_scnb = 2.0
         self.titles = []
+        self._cmap_lines = []
         for filename in filenames:
             if isinstance(filename, str):
                 if AmberOFFLibrary.id_format(filename):
@@ -415,6 +433,9 @@ class AmberParameterSet(ParameterSet, metaclass=FileFormatType):
             elif line.startswith('LJEDIT'):
                 section = 'NBFIX'
                 continue
+            elif line.startswith('CMAP'):
+                section = 'CMAP'
+                continue
 
             if section == 'MASS':
                 self._process_mass_line(line)
@@ -430,6 +451,11 @@ class AmberParameterSet(ParameterSet, metaclass=FileFormatType):
                 self._process_nonbond_line(line)
             elif section == 'NBFIX':
                 self._process_nbfix_line(line)
+            elif section == 'CMAP':
+                self._store_cmap_line(line)
+            
+        if self._cmap_lines:
+            self._process_cmap_lines()
 
     #===================================================
 
@@ -708,6 +734,49 @@ class AmberParameterSet(ParameterSet, metaclass=FileFormatType):
                         math.sqrt(eps1*eps2), rmin1+rmin2
                     )
 
+    def _store_cmap_line(self, line):
+        self._cmap_lines.append(line)
+
+    def _process_cmap_lines(self):
+        groups = []
+        
+        context = ''
+        for line in self._cmap_lines:
+            if line.startswith('%FLAG CMAP_COUNT'):
+                if context != '':
+                    groups.append(AmberCmapType(title, reslist, resolution, resmap))
+                context = ''
+                title = ''
+                reslist = []
+                resolution = 0
+                resmap = []
+                continue
+            elif line.startswith('%FLAG CMAP_RESOLUTION'):
+                resolution = int(line.split()[2])
+                continue
+            elif line.startswith('%FLAG CMAP_TITLE'):
+                context = 'title'
+                continue
+            elif context == 'title':
+                title = line.strip()
+                context = ''
+                continue
+            elif line.startswith('%FLAG CMAP_RESLIST'):
+                context = 'reslist'
+                continue
+            elif context == 'reslist':
+                reslist.extend([x.strip() for x in line.split()])
+                context = ''
+                continue
+            elif line.startswith('%FLAG CMAP_PARAMETER'):
+                context = 'parameter'
+                continue
+            elif context == 'parameter':
+                resmap.extend([float(x) for x in line.split()])
+
+        for group in groups:
+            self.cmap_types[group.title] = group
+
     #===================================================
 
     def write(self, dest, title='Created by ParmEd', style='frcmod'):
@@ -780,13 +849,13 @@ class AmberParameterSet(ParameterSet, metaclass=FileFormatType):
         outfile.write('IMPROPER\n')
         written_impropers = dict()
         for (a1, a2, a3, a4), typ in self.improper_periodic_types.items():
-            # Make sure wild-cards come at the beginning
-            if a2 == 'X':
-                assert a4 == 'X', 'Malformed generic improper!'
-                a1, a2, a3, a4 = a2, a4, a3, a1
-            elif a4 == 'X':
-                a1, a2, a3, a4 = a4, a1, a3, a2
             a1, a2, a4 = sorted([a1, a2, a4])
+            # Make sure wild-cards come at the beginning
+            if a2 == 'X' and a4 == 'X':
+                # assert a4 == 'X', 'Malformed generic improper!'
+                a1, a2, a3, a4 = a2, a4, a3, a1
+            elif a4 == 'X' and a2 != 'X':
+                a1, a2, a3, a4 = a4, a1, a3, a2
             if (a1, a2, a3, a4) in written_impropers:
                 if written_impropers[(a1, a2, a3, a4)] != typ:
                     raise ValueError('Multiple impropers with the same atom set not allowed')
@@ -799,7 +868,9 @@ class AmberParameterSet(ParameterSet, metaclass=FileFormatType):
         # Write the LJ terms
         outfile.write('NONB\n')
         for atom, typ in self.atom_types.items():
-            outfile.write(f'{atom:<2}  {typ.rmin:12.8f} {typ.epsilon:12.8f}\n')
+            # Certain atoms do not seem to have LJ terms
+            if typ.rmin is not None:
+                outfile.write(f'{atom:<2}  {typ.rmin:12.8f} {typ.epsilon:12.8f}\n')
         outfile.write('\n')
         # Write the NBFIX terms
         if self.nbfix_types:
@@ -808,6 +879,17 @@ class AmberParameterSet(ParameterSet, metaclass=FileFormatType):
                 outfile.write(
                     f'{a1:<2} {a2:<2} {eps:12.8f} {rmin / 2:12.8f} {eps:12.8f} {rmin / 2:12.8f}\n'
                 )
+        # Write the cmap terms
+        if self.cmap_types:
+            outfile.write('CMAP\n')
+            for i, ambercmap in enumerate(self.cmap_types.values()):
+                outfile.write(f"%FLAG CMAP_COUNT{i:>4}\n%FLAG CMAP_TITLE\n")
+                outfile.write(f"{ambercmap.title}\n")
+                outfile.write(f"%FLAG CMAP_RESLIST{len(ambercmap.reslist):>3}\n")
+                outfile.write(f"{' '.join(ambercmap.reslist)}\n")
+                outfile.write(f"%FLAG CMAP_RESOLUTION{ambercmap.resolution:>4}\n%FLAG CMAP_PARAMETER\n")
+                for j in range(int(ambercmap.resolution**2/8)):
+                    outfile.write(''.join([f"{x:9.5f}" for x in ambercmap.grid[j:j+8]]))
 
         if own_handle:
             outfile.close()

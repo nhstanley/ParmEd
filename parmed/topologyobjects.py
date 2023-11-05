@@ -3341,7 +3341,7 @@ class CmapType(_ParameterType, _ListItem):
         with each point having the units kcal/mol
     comments : ``list(str)``
         List of strings that represent comments about this parameter type
-    list : :class:`TrackedList`
+    tlist : :class:`TrackedList`
         If not None, this is a list in which this instance _may_ be a member
     idx : ``int``
         The index of this CmapType inside its containing list
@@ -3373,18 +3373,18 @@ class CmapType(_ParameterType, _ListItem):
     >>> ct.idx # not part of a list or iterable
     -1
     """
-    def __init__(self, resolution, grid, comments=None, list=None):
+    def __init__(self, resolution, grid, comments=None, tlist=None):
         _ParameterType.__init__(self)
         self.resolution = resolution
         self.grid = _CmapGrid(resolution, grid)
         if len(grid) != self.resolution * self.resolution:
-            raise TypeError('CMAP grid does not match expected resolution')
+            raise TypeError(f'CMAP grid size {len(grid)} does not match expected resolution {self.resolution*self.resolution}')
         if comments is None:
             self.comments = []
         else:
             self.comments = comments
         self._idx = -1
-        self.list = list
+        self.tlist = tlist
 
     @_exception_to_notimplemented
     def __eq__(self, other):
@@ -5151,8 +5151,12 @@ class AtomType:
         self.charge = charge
 
     def __repr__(self):
-        return (f"<{self.__class__.__name__} {self.name} [# {self.number}]; q={self.charge:.4f} rmin={self.rmin:.4f} "
-                f"epsilon={self.epsilon:.4f} rmin_14={self.rmin_14:.4f} epsilon_14={self.epsilon_14:.4f}>")
+        rmin = "None" if self.rmin is None else f"{self.rmin:.4f}"
+        eps = "None" if self.epsilon is None else f"{self.epsilon:.4f}"
+        rmin_14 = "None" if self.rmin_14 is None else f"{self.rmin_14:.4f}"
+        eps_14 = "None" if self.epsilon_14 is None else f"{self.epsilon_14:.4f}"
+        return (f"<{self.__class__.__name__} {self.name} [# {self.number}]; q={self.charge:.4f} rmin={rmin} "
+                f"epsilon={eps} rmin_14={rmin_14} epsilon_14={eps_14}>")
 
     @_exception_to_notimplemented
     def __eq__(self, other):
