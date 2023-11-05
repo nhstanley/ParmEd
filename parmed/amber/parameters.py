@@ -1,7 +1,6 @@
 """
 This module contains classes for parsing and processing Amber parameter files.
 """
-import IPython as ip
 from collections import defaultdict
 from contextlib import closing
 import math
