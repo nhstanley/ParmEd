@@ -3341,7 +3341,7 @@ class CmapType(_ParameterType, _ListItem):
         with each point having the units kcal/mol
     comments : ``list(str)``
         List of strings that represent comments about this parameter type
-    tlist : :class:`TrackedList`
+    list : :class:`TrackedList`
         If not None, this is a list in which this instance _may_ be a member
     idx : ``int``
         The index of this CmapType inside its containing list
@@ -3373,7 +3373,7 @@ class CmapType(_ParameterType, _ListItem):
     >>> ct.idx # not part of a list or iterable
     -1
     """
-    def __init__(self, resolution, grid, comments=None, tlist=None):
+    def __init__(self, resolution, grid, comments=None, list=None):
         _ParameterType.__init__(self)
         self.resolution = resolution
         self.grid = _CmapGrid(resolution, grid)
@@ -3384,7 +3384,7 @@ class CmapType(_ParameterType, _ListItem):
         else:
             self.comments = comments
         self._idx = -1
-        self.tlist = tlist
+        self.list = list
 
     @_exception_to_notimplemented
     def __eq__(self, other):

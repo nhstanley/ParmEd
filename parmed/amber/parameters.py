@@ -69,10 +69,10 @@ class AmberCmapType(CmapType):
             resolution: int, 
             grid: list, 
             comments=None, 
-            tlist=None, 
+            list=None, 
             atom_types=("C", "N", "XC", "C", "N")
         ):
-        super().__init__(resolution, grid, comments, tlist)
+        super().__init__(resolution, grid, comments, list)
         self.title = title
         self.reslist = reslist
         self.atom_types = atom_types

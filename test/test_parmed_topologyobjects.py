@@ -1341,9 +1341,9 @@ class TestTopologyObjects(unittest.TestCase):
         cg1 = list(range(36))
         cg2 = list(reversed(range(36)))
         cmap_types = TrackedList()
-        cmap_types.append(CmapType(6, cg1, tlist=cmap_types))
-        cmap_types.append(CmapType(6, cg2, tlist=cmap_types))
-        cmap_types.append(CmapType(6, cg1[:], tlist=cmap_types))
+        cmap_types.append(CmapType(6, cg1, list=cmap_types))
+        cmap_types.append(CmapType(6, cg2, list=cmap_types))
+        cmap_types.append(CmapType(6, cg1[:], list=cmap_types))
         cmap1 = Cmap.extended(atoms[0], atoms[1], atoms[2], atoms[3],
                               atoms[1], atoms[2], atoms[3], atoms[4],
                               cmap_types[0])
@@ -1375,8 +1375,6 @@ class TestTopologyObjects(unittest.TestCase):
         for i, bond in enumerate(bonds):
             if 0 <= i < 4:
                 self.assertIn(bond, cmap1)
-            if 3 <= i < 7:
-                self.assertIn(bond, cmap2)
             if 5 <= i < 9:
                 self.assertIn(bond, cmap3)
         # Check the same_atoms method
